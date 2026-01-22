@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Only run build check when pushing to main branch
+while read local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" == "refs/heads/main" ]]; then
+    echo "🔨 Pushing to main - running build check..."
+    
+    cd apps/dashboard
+    if ! npm run build; then
+      echo ""
+      echo "❌ Build failed! Push to main blocked."
+      exit 1
+    fi
+    
+    echo "✅ Build passed - pushing to main"
+  fi
+done
+
+exit 0
