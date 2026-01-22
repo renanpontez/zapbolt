@@ -46,7 +46,7 @@ const projectSchema = z.object({
 
 type ProjectFormData = z.infer<typeof projectSchema>;
 
-interface WidgetConfig {
+interface LocalWidgetConfig {
   position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
   primaryColor: string;
   [key: string]: unknown;
@@ -65,13 +65,16 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
   const [apiKeyCopied, setApiKeyCopied] = useState(false);
 
   // Local state for widget config (to avoid saving on every change)
-  const [localWidgetConfig, setLocalWidgetConfig] = useState<WidgetConfig | null>(null);
+  const [localWidgetConfig, setLocalWidgetConfig] = useState<LocalWidgetConfig | null>(null);
   const [localIsActive, setLocalIsActive] = useState<boolean | null>(null);
 
   // Initialize local state when project loads
   useEffect(() => {
     if (project) {
-      setLocalWidgetConfig(project.widgetConfig as WidgetConfig);
+      setLocalWidgetConfig({
+        position: project.widgetConfig.position,
+        primaryColor: project.widgetConfig.primaryColor,
+      });
       setLocalIsActive(project.isActive);
     }
   }, [project]);
@@ -108,7 +111,9 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
       name: formData.name,
       domain: formData.domain,
       isActive: localIsActive ?? project.isActive,
-      widgetConfig: localWidgetConfig ?? project.widgetConfig,
+      widgetConfig: localWidgetConfig
+        ? { ...project.widgetConfig, ...localWidgetConfig }
+        : project.widgetConfig,
     });
 
     // Reset form dirty state
@@ -117,7 +122,10 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
 
   const handleDiscardChanges = () => {
     if (project) {
-      setLocalWidgetConfig(project.widgetConfig as WidgetConfig);
+      setLocalWidgetConfig({
+        position: project.widgetConfig.position,
+        primaryColor: project.widgetConfig.primaryColor,
+      });
       setLocalIsActive(project.isActive);
       form.reset({ name: project.name, domain: project.domain });
     }
@@ -148,7 +156,7 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
     if (localWidgetConfig) {
       setLocalWidgetConfig({
         ...localWidgetConfig,
-        position: position as WidgetConfig['position'],
+        position: position as LocalWidgetConfig['position'],
       });
     }
   };
