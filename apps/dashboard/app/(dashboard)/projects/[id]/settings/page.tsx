@@ -1,12 +1,12 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Loader2, RefreshCw, Trash2, Code, Palette, Globe } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, Trash2, Code, Palette, Globe, Save, X } from 'lucide-react';
 
 import { useProject, useUpdateProject, useDeleteProject, useRegenerateApiKey } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,12 @@ const projectSchema = z.object({
 
 type ProjectFormData = z.infer<typeof projectSchema>;
 
+interface WidgetConfig {
+  position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+  primaryColor: string;
+  [key: string]: unknown;
+}
+
 export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps) {
   const { id } = use(params);
   const router = useRouter();
@@ -58,6 +64,18 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [apiKeyCopied, setApiKeyCopied] = useState(false);
 
+  // Local state for widget config (to avoid saving on every change)
+  const [localWidgetConfig, setLocalWidgetConfig] = useState<WidgetConfig | null>(null);
+  const [localIsActive, setLocalIsActive] = useState<boolean | null>(null);
+
+  // Initialize local state when project loads
+  useEffect(() => {
+    if (project) {
+      setLocalWidgetConfig(project.widgetConfig as WidgetConfig);
+      setLocalIsActive(project.isActive);
+    }
+  }, [project]);
+
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
     values: project
@@ -65,8 +83,44 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
       : undefined,
   });
 
-  const handleSave = async (data: ProjectFormData) => {
-    await updateProject.mutateAsync(data);
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    if (!project || !localWidgetConfig) return false;
+
+    const configChanged =
+      localWidgetConfig.position !== project.widgetConfig.position ||
+      localWidgetConfig.primaryColor !== project.widgetConfig.primaryColor;
+
+    const activeChanged = localIsActive !== project.isActive;
+
+    const formChanged = form.formState.isDirty;
+
+    return configChanged || activeChanged || formChanged;
+  }, [project, localWidgetConfig, localIsActive, form.formState.isDirty]);
+
+  const handleSaveAll = async () => {
+    const formData = form.getValues();
+    const formValid = await form.trigger();
+
+    if (!formValid || !project) return;
+
+    await updateProject.mutateAsync({
+      name: formData.name,
+      domain: formData.domain,
+      isActive: localIsActive ?? project.isActive,
+      widgetConfig: localWidgetConfig ?? project.widgetConfig,
+    });
+
+    // Reset form dirty state
+    form.reset(formData);
+  };
+
+  const handleDiscardChanges = () => {
+    if (project) {
+      setLocalWidgetConfig(project.widgetConfig as WidgetConfig);
+      setLocalIsActive(project.isActive);
+      form.reset({ name: project.name, domain: project.domain });
+    }
   };
 
   const handleDelete = async () => {
@@ -86,16 +140,24 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
     }
   };
 
-  const handleToggleActive = async () => {
-    if (project) {
-      await updateProject.mutateAsync({ isActive: !project.isActive });
+  const handleToggleActive = (checked: boolean) => {
+    setLocalIsActive(checked);
+  };
+
+  const handlePositionChange = (position: string) => {
+    if (localWidgetConfig) {
+      setLocalWidgetConfig({
+        ...localWidgetConfig,
+        position: position as WidgetConfig['position'],
+      });
     }
   };
 
-  const handlePositionChange = async (position: string) => {
-    if (project) {
-      await updateProject.mutateAsync({
-        widgetConfig: { ...project.widgetConfig, position: position as any },
+  const handleColorChange = (color: string) => {
+    if (localWidgetConfig) {
+      setLocalWidgetConfig({
+        ...localWidgetConfig,
+        primaryColor: color,
       });
     }
   };
@@ -124,7 +186,7 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
@@ -133,7 +195,7 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
           </Link>
         </Button>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Project Settings</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Project Settings</h2>
           <p className="text-muted-foreground">{project.name}</p>
         </div>
       </div>
@@ -148,49 +210,39 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
             </CardTitle>
             <CardDescription>Basic project settings</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Project Name</Label>
-                <Input id="name" {...form.register('name')} />
-                {form.formState.errors.name && (
-                  <p className="text-sm text-destructive">
-                    {form.formState.errors.name.message}
-                  </p>
-                )}
-              </div>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Project Name</Label>
+              <Input id="name" {...form.register('name')} />
+              {form.formState.errors.name && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.name.message}
+                </p>
+              )}
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="domain">Domain</Label>
-                <Input id="domain" {...form.register('domain')} />
-                {form.formState.errors.domain && (
-                  <p className="text-sm text-destructive">
-                    {form.formState.errors.domain.message}
-                  </p>
-                )}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="domain">Domain</Label>
+              <Input id="domain" {...form.register('domain')} />
+              {form.formState.errors.domain && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.domain.message}
+                </p>
+              )}
+            </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Active</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Enable or disable the widget on your site
-                  </p>
-                </div>
-                <Switch
-                  checked={project.isActive}
-                  onCheckedChange={handleToggleActive}
-                  disabled={updateProject.isPending}
-                />
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Active</Label>
+                <p className="text-sm text-muted-foreground">
+                  Enable or disable the widget on your site
+                </p>
               </div>
-
-              <Button type="submit" disabled={updateProject.isPending}>
-                {updateProject.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Save Changes
-              </Button>
-            </form>
+              <Switch
+                checked={localIsActive ?? project.isActive}
+                onCheckedChange={handleToggleActive}
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -221,9 +273,8 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
             <div className="space-y-2">
               <Label>Button Position</Label>
               <Select
-                value={project.widgetConfig.position}
+                value={localWidgetConfig?.position ?? project.widgetConfig.position}
                 onValueChange={handlePositionChange}
-                disabled={updateProject.isPending}
               >
                 <SelectTrigger className="w-[200px]">
                   <SelectValue />
@@ -243,22 +294,20 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
                 <Input
                   id="primaryColor"
                   type="color"
-                  value={project.widgetConfig.primaryColor}
-                  onChange={(e) =>
-                    updateProject.mutate({
-                      widgetConfig: { ...project.widgetConfig, primaryColor: e.target.value },
-                    })
-                  }
-                  className="w-12 h-9 p-1"
+                  value={localWidgetConfig?.primaryColor ?? project.widgetConfig.primaryColor}
+                  onChange={(e) => handleColorChange(e.target.value)}
+                  className="w-12 h-9 p-1 cursor-pointer"
                 />
                 <Input
-                  value={project.widgetConfig.primaryColor}
-                  onChange={(e) =>
-                    updateProject.mutate({
-                      widgetConfig: { ...project.widgetConfig, primaryColor: e.target.value },
-                    })
-                  }
-                  className="w-32"
+                  value={localWidgetConfig?.primaryColor ?? project.widgetConfig.primaryColor}
+                  onChange={(e) => handleColorChange(e.target.value)}
+                  className="w-32 font-mono"
+                  placeholder="#3b82f6"
+                />
+                {/* Color preview */}
+                <div
+                  className="w-9 h-9 rounded-md border shadow-sm"
+                  style={{ backgroundColor: localWidgetConfig?.primaryColor ?? project.widgetConfig.primaryColor }}
                 />
               </div>
             </div>
@@ -345,6 +394,40 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Floating Save Bar */}
+      {hasUnsavedChanges && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container flex items-center justify-between gap-4 py-4 px-4 md:px-6 max-w-4xl mx-auto">
+            <p className="text-sm text-muted-foreground">
+              You have unsaved changes
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDiscardChanges}
+                disabled={updateProject.isPending}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveAll}
+                disabled={updateProject.isPending}
+              >
+                {updateProject.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

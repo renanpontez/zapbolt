@@ -44,10 +44,15 @@ export function getConfig(): WidgetConfig {
 }
 
 export function setConfig(newConfig: Partial<WidgetConfig> & { projectId: string }): WidgetConfig {
+  // Filter out undefined values to prevent overwriting defaults
+  const filteredConfig = Object.fromEntries(
+    Object.entries(newConfig).filter(([, value]) => value !== undefined)
+  );
+
   config = {
     ...DEFAULT_CONFIG,
-    ...newConfig,
-  };
+    ...filteredConfig,
+  } as WidgetConfig;
   return config;
 }
 

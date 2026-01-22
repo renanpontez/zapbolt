@@ -18,7 +18,8 @@ export default defineConfig({
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true, // Remove console logs for production
+        drop_console: false, // Keep console for debugging
+        pure_funcs: ['console.log', 'console.debug'], // Only remove log/debug, keep warn/error
         drop_debugger: true,
         passes: 2,
       },
