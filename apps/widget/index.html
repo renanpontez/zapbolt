@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zapbolt Widget Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 { color: #1f2937; }
+    p { color: #6b7280; }
+    .card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Zapbolt Widget Test Page</h1>
+  <p>This page is used to test the Zapbolt feedback widget during development.</p>
+
+  <div class="card">
+    <h2>Test Content</h2>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+  </div>
+
+  <div class="card">
+    <h2>Screenshot Test</h2>
+    <p>Click the feedback button and try capturing a screenshot to test the html2canvas integration.</p>
+  </div>
+
+  <!-- Zapbolt Widget -->
+  <script type="module" src="/src/index.ts"></script>
+  <script type="module">
+    // Initialize widget after module loads
+    setTimeout(() => {
+      if (window.Zapbolt) {
+        window.Zapbolt.init({
+          projectId: 'test-project-id',
+          apiUrl: 'http://localhost:3001',
+          position: 'bottom-right',
+          primaryColor: '#3b82f6',
+        });
+      }
+    }, 100);
+  </script>
+</body>
+</html>
