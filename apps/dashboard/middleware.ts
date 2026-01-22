@@ -1,7 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
-const publicPaths = ['/login', '/signup', '/auth/callback', '/api/widget', '/api/auth'];
+const publicPaths = [
+  '/',           // Homepage (marketing)
+  '/login',
+  '/signup',
+  '/auth/callback',
+  '/api/widget',
+  '/api/auth',
+  '/widget.js',  // Widget script
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -10,7 +18,10 @@ export async function middleware(request: NextRequest) {
   const { response, user } = await updateSession(request);
 
   // Allow public paths without auth check
-  if (publicPaths.some(path => pathname.startsWith(path))) {
+  const isPublicPath = publicPaths.some(path =>
+    path === '/' ? pathname === '/' : pathname.startsWith(path)
+  );
+  if (isPublicPath) {
     return response;
   }
 
