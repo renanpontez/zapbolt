@@ -2,7 +2,8 @@
 
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Check, Zap, Building, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,37 +62,40 @@ const plans: {
   },
 ];
 
-export default function BillingPage() {
-  const { user } = useAuth();
+function BillingContent() {
+  const { user, refreshUser } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [loading, setLoading] = useState<string | null>(null);
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
 
   const currentTier = user?.tier || 'free';
 
-  const handleUpgrade = async (tier: Tier) => {
+  // Handle return from checkout with success
+  useEffect(() => {
+    const success = searchParams.get('success');
+    if (success === 'true') {
+      setCheckoutSuccess(true);
+      // Small delay to allow webhook to process before refreshing user
+      const timer = setTimeout(() => {
+        refreshUser?.();
+      }, 1500);
+      // Clean up URL
+      router.replace('/billing', { scroll: false });
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, router, refreshUser]);
+
+  const handleUpgrade = (tier: Tier) => {
     if (tier === 'free' || tier === currentTier) return;
 
-    setLoading(tier);
-    try {
-      if (tier === 'enterprise') {
-        window.location.href = 'mailto:sales@zapbolt.io?subject=Enterprise%20Plan%20Inquiry';
-        return;
-      }
-
-      const response = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier, interval: 'monthly' }),
-      });
-
-      const data = await response.json();
-      if (response.ok && data.url) {
-        window.location.href = data.url;
-      }
-    } catch (error) {
-      console.error('Failed to create checkout session:', error);
-    } finally {
-      setLoading(null);
+    if (tier === 'enterprise') {
+      window.location.href = 'mailto:sales@zapbolt.io?subject=Enterprise%20Plan%20Inquiry';
+      return;
     }
+
+    router.push(`/billing/checkout?tier=${tier}`);
   };
 
   const handleManageBilling = async () => {
@@ -118,6 +122,14 @@ export default function BillingPage() {
         <h2 className="text-3xl font-bold tracking-tight">Billing</h2>
         <p className="text-muted-foreground">Manage your subscription and billing</p>
       </div>
+
+      {checkoutSuccess && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-900/20">
+          <p className="text-sm text-green-800 dark:text-green-200">
+            Your subscription has been activated. Thank you for subscribing!
+          </p>
+        </div>
+      )}
 
       {/* Current Plan */}
       <Card>
@@ -198,7 +210,6 @@ export default function BillingPage() {
                     className="w-full"
                     variant="outline"
                     onClick={() => handleUpgrade('enterprise')}
-                    disabled={loading === 'enterprise'}
                   >
                     Contact Sales
                   </Button>
@@ -206,11 +217,7 @@ export default function BillingPage() {
                   <Button
                     className="w-full"
                     onClick={() => handleUpgrade(plan.tier)}
-                    disabled={loading === plan.tier}
                   >
-                    {loading === plan.tier && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
                     {plan.tier === 'free' ? 'Downgrade' : 'Upgrade'}
                   </Button>
                 )}
@@ -218,6 +225,29 @@ export default function BillingPage() {
             </Card>
           );
         })}
+      </div>
+
+    </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<BillingPageSkeleton />}>
+      <BillingContent />
+    </Suspense>
+  );
+}
+
+function BillingPageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">Billing</h2>
+        <p className="text-muted-foreground">Manage your subscription and billing</p>
+      </div>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     </div>
   );
