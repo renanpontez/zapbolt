@@ -64,20 +64,20 @@ export async function GET(request: Request) {
       ? sortOrderParam
       : 'desc';
 
-    // First, get all project IDs owned by the user
-    const { data: userProjects, error: projectsError } = await supabase
-      .from('projects')
-      .select('id')
+    // Get all project IDs where user is a member
+    const { data: userMemberships, error: membershipsError } = await supabase
+      .from('project_members')
+      .select('project_id')
       .eq('user_id', user.id);
 
-    if (projectsError) {
+    if (membershipsError) {
       return NextResponse.json(
-        { error: { code: 'FETCH_FAILED', message: projectsError.message } },
+        { error: { code: 'FETCH_FAILED', message: membershipsError.message } },
         { status: 500 }
       );
     }
 
-    const userProjectIds = (userProjects as { id: string }[])?.map((p) => p.id) || [];
+    const userProjectIds = (userMemberships as { project_id: string }[])?.map((m) => m.project_id) || [];
 
     if (userProjectIds.length === 0) {
       // User has no projects, return empty result

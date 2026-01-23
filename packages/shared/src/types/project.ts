@@ -20,9 +20,33 @@ export interface UrlPattern {
   createdAt: string;
 }
 
+export type ProjectMemberRole = 'user' | 'admin';
+
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  userId: string;
+  role: ProjectMemberRole;
+  invitedBy: string | null;
+  invitedAt: string;
+  acceptedAt: string | null;
+  user?: {
+    id: string;
+    email: string;
+    name?: string;
+    avatarUrl?: string;
+    workEmail?: string;
+  };
+  invitedByUser?: {
+    id: string;
+    email: string;
+    name?: string;
+  };
+}
+
 export interface Project {
   id: string;
-  userId: string;
+  userId: string; // Now represents created_by for backward compatibility
   name: string;
   domain: string;
   apiKey: string;
@@ -34,6 +58,9 @@ export interface Project {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // Multi-user fields
+  members?: ProjectMember[];
+  currentUserRole?: ProjectMemberRole;
 }
 
 export interface ProjectCreateInput {

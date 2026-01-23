@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { Send, Loader2, Mail, MailX } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Send, Loader2, Mail, MailX, Paperclip, X, FileText, Image as ImageIcon } from 'lucide-react';
 
 import { useSendReply } from '@/hooks/useFeedback';
 import { useToast } from '@/hooks/useToast';
+import { createClient } from '@/lib/supabase/client';
+import { compressImage } from '@/lib/utils/imageCompression';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,29 +18,127 @@ interface ReplyFormProps {
 }
 
 const MAX_MESSAGE_LENGTH = 5000;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FILE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
 
 export function ReplyForm({ feedbackId, userEmail }: ReplyFormProps) {
   const [message, setMessage] = useState('');
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const sendReply = useSendReply(feedbackId);
 
   const hasEmail = Boolean(userEmail);
   const characterCount = message.length;
   const isOverLimit = characterCount > MAX_MESSAGE_LENGTH;
-  const canSend = hasEmail && message.trim().length > 0 && !isOverLimit && !sendReply.isPending;
+  const isBusy = sendReply.isPending || isUploading;
+  const canSend = hasEmail && message.trim().length > 0 && !isOverLimit && !isBusy;
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload an image, PDF, or document file.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: 'File too large',
+        description: 'Maximum file size is 10MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setAttachment(file);
+  };
+
+  const removeAttachment = () => {
+    setAttachment(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const uploadAttachment = async (file: File): Promise<string | null> => {
+    const supabase = createClient();
+
+    // Compress images before upload (max 1MB, max 1920px)
+    const fileToUpload = await compressImage(file, {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1920,
+    });
+
+    const fileExt = fileToUpload.name.split('.').pop();
+    const fileName = `${feedbackId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+    const { data, error } = await supabase.storage
+      .from('reply-attachments')
+      .upload(fileName, fileToUpload);
+
+    if (error) {
+      console.error('Upload error:', error);
+      return null;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('reply-attachments')
+      .getPublicUrl(data.path);
+
+    return urlData.publicUrl;
+  };
 
   const handleSend = async () => {
     if (!canSend) return;
 
     try {
-      await sendReply.mutateAsync(message.trim());
+      setIsUploading(true);
+      let attachmentUrl: string | undefined;
+
+      if (attachment) {
+        const url = await uploadAttachment(attachment);
+        if (!url) {
+          toast({
+            title: 'Failed to upload attachment',
+            description: 'Please try again.',
+            variant: 'destructive',
+          });
+          setIsUploading(false);
+          return;
+        }
+        attachmentUrl = url;
+      }
+
+      setIsUploading(false);
+      await sendReply.mutateAsync({ message: message.trim(), attachmentUrl });
       setMessage('');
+      setAttachment(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       toast({
         title: 'Reply sent',
         description: `Your reply has been sent to ${userEmail}`,
         variant: 'success',
       });
     } catch (error) {
+      setIsUploading(false);
       toast({
         title: 'Failed to send reply',
         description: error instanceof Error ? error.message : 'An error occurred while sending your reply',
@@ -47,12 +147,9 @@ export function ReplyForm({ feedbackId, userEmail }: ReplyFormProps) {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Allow Cmd/Ctrl + Enter to send
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSend) {
-      e.preventDefault();
-      handleSend();
-    }
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return <ImageIcon className="h-4 w-4" />;
+    return <FileText className="h-4 w-4" />;
   };
 
   if (!hasEmail) {
@@ -103,7 +200,6 @@ export function ReplyForm({ feedbackId, userEmail }: ReplyFormProps) {
               id="reply-message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
               placeholder="Type your reply..."
               rows={5}
               className="resize-none pr-20"
@@ -126,20 +222,54 @@ export function ReplyForm({ feedbackId, userEmail }: ReplyFormProps) {
           )}
         </div>
 
+        {attachment && (
+          <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+            {getFileIcon(attachment.type)}
+            <span className="text-sm truncate flex-1">{attachment.name}</span>
+            <span className="text-xs text-muted-foreground">
+              {(attachment.size / 1024).toFixed(1)} KB
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={removeAttachment}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            Press <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border">Cmd</kbd> +{' '}
-            <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border">Enter</kbd> to send
-          </p>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept={ALLOWED_FILE_TYPES.join(',')}
+              onChange={handleFileSelect}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isBusy}
+            >
+              <Paperclip className="h-4 w-4 mr-1" />
+              Attach
+            </Button>
+          </div>
           <Button
             onClick={handleSend}
             disabled={!canSend}
             className="gap-2"
           >
-            {sendReply.isPending ? (
+            {isBusy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Sending...
+                {isUploading ? 'Uploading...' : 'Sending...'}
               </>
             ) : (
               <>

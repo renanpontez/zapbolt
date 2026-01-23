@@ -2,15 +2,19 @@ import { NextResponse } from 'next/server';
 import { createAuthClient, createServerClient, ensureUserProfile } from '@/lib/supabase/server';
 import { z } from 'zod';
 import type { Tables } from '@/lib/supabase/database.types';
+import type { ProjectMemberRole } from '@zapbolt/shared';
 
-type ProjectWithPatterns = Tables<'projects'> & { url_patterns: Tables<'url_patterns'>[] | null };
+type ProjectWithPatterns = Tables<'projects'> & {
+  url_patterns: Tables<'url_patterns'>[] | null;
+  project_members?: { role: ProjectMemberRole }[];
+};
 
 const createProjectSchema = z.object({
   name: z.string().min(2).max(50),
   domain: z.string().min(1),
 });
 
-// GET /api/projects - List all projects
+// GET /api/projects - List all projects the user is a member of
 export async function GET() {
   try {
     const authClient = await createAuthClient();
@@ -24,13 +28,16 @@ export async function GET() {
     }
 
     const supabase = await createServerClient();
+
+    // Get all projects where user is a member (RLS will filter automatically)
     const { data: projects, error } = await supabase
       .from('projects')
       .select(`
         *,
-        url_patterns (*)
+        url_patterns (*),
+        project_members!inner (role)
       `)
-      .eq('user_id', user.id)
+      .eq('project_members.user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -43,7 +50,7 @@ export async function GET() {
     // Transform to match expected format
     const formattedProjects = projects.map((p: ProjectWithPatterns) => ({
       id: p.id,
-      userId: p.user_id,
+      userId: p.created_by,
       name: p.name,
       domain: p.domain,
       apiKey: p.api_key,
@@ -55,6 +62,7 @@ export async function GET() {
       isActive: p.is_active,
       createdAt: p.created_at,
       updatedAt: p.updated_at,
+      currentUserRole: p.project_members?.[0]?.role || 'user',
     }));
 
     return NextResponse.json(formattedProjects);
@@ -87,11 +95,12 @@ export async function POST(request: Request) {
 
     const supabase = await createServerClient();
 
-    // Check project limit based on tier
+    // Check project limit based on tier - count projects where user is admin
     const { count } = await supabase
-      .from('projects')
+      .from('project_members')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .eq('role', 'admin');
 
     // TODO: Get actual tier from user profile
     const maxProjects = 1; // Free tier
@@ -102,11 +111,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // Create the project
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: project, error } = await (supabase as any)
       .from('projects')
       .insert({
-        user_id: user.id,
+        created_by: user.id,
         name,
         domain,
       })
@@ -120,9 +130,30 @@ export async function POST(request: Request) {
       );
     }
 
+    // Create project_member entry with admin role
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: memberError } = await (supabase as any)
+      .from('project_members')
+      .insert({
+        project_id: project.id,
+        user_id: user.id,
+        role: 'admin',
+        invited_by: user.id,
+        accepted_at: new Date().toISOString(),
+      });
+
+    if (memberError) {
+      // If member creation fails, delete the project to maintain consistency
+      await supabase.from('projects').delete().eq('id', project.id);
+      return NextResponse.json(
+        { error: { code: 'CREATE_FAILED', message: 'Failed to set up project membership' } },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       id: project.id,
-      userId: project.user_id,
+      userId: project.created_by,
       name: project.name,
       domain: project.domain,
       apiKey: project.api_key,
@@ -134,6 +165,7 @@ export async function POST(request: Request) {
       isActive: project.is_active,
       createdAt: project.created_at,
       updatedAt: project.updated_at,
+      currentUserRole: 'admin',
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

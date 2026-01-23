@@ -7,12 +7,13 @@ const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   name: z.string().min(2).optional(),
+  workEmail: z.string().email().optional(),
 });
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password, name } = signupSchema.parse(body);
+    const { email, password, name, workEmail } = signupSchema.parse(body);
 
     const cookieStore = await cookies();
     const cookiesToSet: { name: string; value: string; options: CookieOptions }[] = [];
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
       options: {
         data: {
           name,
+          work_email: workEmail,
         },
       },
     });

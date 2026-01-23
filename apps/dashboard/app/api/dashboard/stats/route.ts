@@ -8,6 +8,10 @@ interface ProjectRow {
   monthly_feedback_count: number;
 }
 
+interface MembershipWithProject {
+  project: ProjectRow | null;
+}
+
 interface FeedbackRow {
   status: string;
   category: string;
@@ -43,10 +47,17 @@ export async function GET() {
 
     const supabase = await createServerClient();
 
-    // Get all projects for the user
+    // Get all projects for the user via membership
     const { data: projects, error: projectsError } = await supabase
-      .from('projects')
-      .select('id, is_active, feedback_count, monthly_feedback_count')
+      .from('project_members')
+      .select(`
+        project:projects (
+          id,
+          is_active,
+          feedback_count,
+          monthly_feedback_count
+        )
+      `)
       .eq('user_id', user.id);
 
     if (projectsError) {
@@ -56,12 +67,15 @@ export async function GET() {
       );
     }
 
-    // Type assertion for the query result
-    const typedProjects = projects as unknown as ProjectRow[] | null;
+    // Extract projects from membership query result
+    const memberships = projects as unknown as MembershipWithProject[] | null;
+    const typedProjects = memberships
+      ?.map((m) => m.project)
+      .filter((p): p is ProjectRow => p !== null) || [];
 
-    const projectIds = typedProjects?.map((p) => p.id) || [];
-    const totalProjects = typedProjects?.length || 0;
-    const activeProjects = typedProjects?.filter((p) => p.is_active).length || 0;
+    const projectIds = typedProjects.map((p) => p.id);
+    const totalProjects = typedProjects.length;
+    const activeProjects = typedProjects.filter((p) => p.is_active).length;
 
     // If no projects, return zero stats
     if (projectIds.length === 0) {

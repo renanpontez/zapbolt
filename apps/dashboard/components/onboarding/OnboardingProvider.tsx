@@ -2,15 +2,11 @@
 
 import { createContext, useContext, ReactNode } from 'react';
 import { useOnboarding } from '@/hooks/useOnboarding';
-import { OnboardingTour } from './OnboardingTour';
+import { OnboardingWizard } from './OnboardingWizard';
 
 interface OnboardingContextType {
-  isActive: boolean;
-  currentStep: number;
-  totalSteps: number;
-  nextStep: () => void;
-  skipTour: () => void;
-  completeTour: () => void;
+  showWizard: boolean;
+  closeWizard: () => void;
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(
@@ -27,16 +23,15 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   return (
     <OnboardingContext.Provider
       value={{
-        isActive: onboarding.isActive,
-        currentStep: onboarding.currentStep,
-        totalSteps: onboarding.totalSteps,
-        nextStep: onboarding.nextStep,
-        skipTour: onboarding.skipTour,
-        completeTour: onboarding.completeTour,
+        showWizard: onboarding.showWizard,
+        closeWizard: onboarding.closeWizard,
       }}
     >
       {children}
-      <OnboardingTour />
+      <OnboardingWizard
+        open={onboarding.showWizard}
+        onComplete={onboarding.closeWizard}
+      />
     </OnboardingContext.Provider>
   );
 }

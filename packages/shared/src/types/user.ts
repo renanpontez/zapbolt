@@ -5,6 +5,7 @@ export interface User {
   email: string;
   name?: string;
   avatarUrl?: string;
+  workEmail?: string;
   tier: Tier;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
@@ -24,6 +25,7 @@ export interface AuthCredentials {
 
 export interface SignUpInput extends AuthCredentials {
   name?: string;
+  workEmail?: string;
 }
 
 export interface AuthResponse {

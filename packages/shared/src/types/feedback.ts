@@ -67,6 +67,7 @@ export interface FeedbackReply {
   message: string;
   sentBy: FeedbackReplySender;
   sentByEmail: string;
+  attachmentUrl?: string;
   createdAt: string;
 }
 
@@ -82,4 +83,22 @@ export interface CreateFeedbackReplyResponse {
   id: string;
   message: string;
   createdAt: string;
+}
+
+export type FeedbackChangeField = 'status' | 'category' | 'priority';
+
+export interface FeedbackChangeLog {
+  id: string;
+  feedbackId: string;
+  field: FeedbackChangeField;
+  oldValue: string;
+  newValue: string;
+  changedBy: string;
+  changedByEmail: string;
+  changedByName: string | null;
+  createdAt: string;
+}
+
+export interface FeedbackChangeLogListResponse {
+  logs: FeedbackChangeLog[];
 }

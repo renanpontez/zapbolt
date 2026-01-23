@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAuthClient, createServerClient } from '@/lib/supabase/server';
+import { requireProjectAdmin } from '@/lib/supabase/membership';
 import { z } from 'zod';
-import type { Tables } from '@/lib/supabase/database.types';
 
 const bulkUpdateSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, 'At least one ID is required'),
@@ -12,11 +12,7 @@ const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, 'At least one ID is required'),
 });
 
-type FeedbackWithProject = Tables<'feedback'> & {
-  projects: { user_id: string };
-};
-
-// PATCH /api/feedback/bulk - Bulk update status
+// PATCH /api/feedback/bulk - Bulk update status (admin only)
 export async function PATCH(request: Request) {
   try {
     const authClient = await createAuthClient();
@@ -37,15 +33,10 @@ export async function PATCH(request: Request) {
 
     const supabase = await createServerClient();
 
-    // Verify ownership of all feedback items
+    // Get feedback items with project_id
     const { data: feedbackItems, error: fetchError } = await supabase
       .from('feedback')
-      .select(
-        `
-        id,
-        projects!inner (user_id)
-      `
-      )
+      .select('id, project_id')
       .in('id', ids);
 
     if (fetchError) {
@@ -55,24 +46,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const items = feedbackItems as unknown as Array<{
-      id: string;
-      projects: { user_id: string };
-    }>;
-
-    // Check that all items belong to the user
-    const unauthorizedItems = items.filter((item) => item.projects.user_id !== user.id);
-    if (unauthorizedItems.length > 0) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'FORBIDDEN',
-            message: 'You do not have permission to update some of these feedback items',
-          },
-        },
-        { status: 403 }
-      );
-    }
+    const items = feedbackItems as Array<{ id: string; project_id: string }>;
 
     // Check if all requested items were found
     const foundIds = new Set(items.map((item) => item.id));
@@ -87,6 +61,23 @@ export async function PATCH(request: Request) {
         },
         { status: 404 }
       );
+    }
+
+    // Check that user is admin of all projects involved
+    const projectIds = [...new Set(items.map((item) => item.project_id))];
+    for (const projectId of projectIds) {
+      const isAdmin = await requireProjectAdmin(user.id, projectId);
+      if (!isAdmin) {
+        return NextResponse.json(
+          {
+            error: {
+              code: 'FORBIDDEN',
+              message: 'You do not have permission to update some of these feedback items',
+            },
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Perform bulk update
@@ -118,7 +109,7 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE /api/feedback/bulk - Bulk delete
+// DELETE /api/feedback/bulk - Bulk delete (admin only)
 export async function DELETE(request: Request) {
   try {
     const authClient = await createAuthClient();
@@ -139,15 +130,10 @@ export async function DELETE(request: Request) {
 
     const supabase = await createServerClient();
 
-    // Verify ownership of all feedback items
+    // Get feedback items with project_id
     const { data: feedbackItems, error: fetchError } = await supabase
       .from('feedback')
-      .select(
-        `
-        id,
-        projects!inner (user_id)
-      `
-      )
+      .select('id, project_id')
       .in('id', ids);
 
     if (fetchError) {
@@ -157,24 +143,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const items = feedbackItems as unknown as Array<{
-      id: string;
-      projects: { user_id: string };
-    }>;
-
-    // Check that all items belong to the user
-    const unauthorizedItems = items.filter((item) => item.projects.user_id !== user.id);
-    if (unauthorizedItems.length > 0) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'FORBIDDEN',
-            message: 'You do not have permission to delete some of these feedback items',
-          },
-        },
-        { status: 403 }
-      );
-    }
+    const items = feedbackItems as Array<{ id: string; project_id: string }>;
 
     // Check if all requested items were found
     const foundIds = new Set(items.map((item) => item.id));
@@ -189,6 +158,23 @@ export async function DELETE(request: Request) {
         },
         { status: 404 }
       );
+    }
+
+    // Check that user is admin of all projects involved
+    const projectIds = [...new Set(items.map((item) => item.project_id))];
+    for (const projectId of projectIds) {
+      const isAdmin = await requireProjectAdmin(user.id, projectId);
+      if (!isAdmin) {
+        return NextResponse.json(
+          {
+            error: {
+              code: 'FORBIDDEN',
+              message: 'You do not have permission to delete some of these feedback items',
+            },
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Perform bulk delete

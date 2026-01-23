@@ -8,6 +8,10 @@ import type {
   FeedbackReply,
   FeedbackReplyListResponse,
   FeedbackStatus,
+  FeedbackCategory,
+  FeedbackPriority,
+  FeedbackChangeLog,
+  FeedbackChangeLogListResponse,
   PaginatedResponse,
   CreateFeedbackReplyResponse,
 } from '@zapbolt/shared';
@@ -15,6 +19,24 @@ import type {
 // Extended feedback type that includes project information
 export interface FeedbackWithProject extends Feedback {
   projectName: string;
+}
+
+// Internal notes types
+export interface InternalNoteAuthor {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
+export interface InternalNote {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: InternalNoteAuthor;
+}
+
+export interface InternalNotesResponse {
+  notes: InternalNote[];
 }
 
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
@@ -209,6 +231,7 @@ export function useUpdateFeedbackStatus(feedbackId: string) {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['feedback'] });
+      queryClient.invalidateQueries({ queryKey: ['feedback', 'change-logs', feedbackId] });
     },
   });
 }
@@ -222,10 +245,8 @@ export function useUpdateFeedbackNotes(feedbackId: string) {
         method: 'PATCH',
         body: JSON.stringify({ internalNotes }),
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['feedback', 'item', feedbackId],
-      });
+    onSuccess: (data) => {
+      queryClient.setQueryData(['feedback', 'item', feedbackId], data);
     },
   });
 }
@@ -363,14 +384,19 @@ export function useFeedbackReplies(feedbackId: string) {
   });
 }
 
+interface SendReplyParams {
+  message: string;
+  attachmentUrl?: string;
+}
+
 export function useSendReply(feedbackId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (message: string) =>
+    mutationFn: ({ message, attachmentUrl }: SendReplyParams) =>
       fetchApi<CreateFeedbackReplyResponse>(`/api/feedback/${feedbackId}/reply`, {
         method: 'POST',
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, attachmentUrl }),
       }),
     onSuccess: (newReply) => {
       // Optimistically add the new reply to the cache
@@ -396,5 +422,138 @@ export function useSendReply(feedbackId: string) {
         queryKey: ['feedback', 'replies', feedbackId],
       });
     },
+  });
+}
+
+// Internal Notes Hooks
+
+export function useInternalNotes(feedbackId: string) {
+  const { isAuthenticated } = useAuth();
+
+  return useQuery({
+    queryKey: ['feedback', 'notes', feedbackId],
+    queryFn: () => fetchApi<InternalNotesResponse>(`/api/feedback/${feedbackId}/notes`),
+    enabled: isAuthenticated && !!feedbackId,
+  });
+}
+
+export function useCreateInternalNote(feedbackId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (content: string) =>
+      fetchApi<InternalNote>(`/api/feedback/${feedbackId}/notes`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      }),
+    onSuccess: (newNote) => {
+      queryClient.setQueryData<InternalNotesResponse>(
+        ['feedback', 'notes', feedbackId],
+        (old) => ({
+          notes: [...(old?.notes || []), newNote],
+        })
+      );
+    },
+  });
+}
+
+// Update feedback category
+export function useUpdateFeedbackCategory(feedbackId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (category: FeedbackCategory) =>
+      fetchApi<Feedback>(`/api/feedback/${feedbackId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ category }),
+      }),
+    onMutate: async (newCategory) => {
+      await queryClient.cancelQueries({
+        queryKey: ['feedback', 'item', feedbackId],
+      });
+
+      const previousFeedback = queryClient.getQueryData<Feedback>([
+        'feedback',
+        'item',
+        feedbackId,
+      ]);
+
+      if (previousFeedback) {
+        queryClient.setQueryData(['feedback', 'item', feedbackId], {
+          ...previousFeedback,
+          category: newCategory,
+        });
+      }
+
+      return { previousFeedback };
+    },
+    onError: (_err, _newCategory, context) => {
+      if (context?.previousFeedback) {
+        queryClient.setQueryData(
+          ['feedback', 'item', feedbackId],
+          context.previousFeedback
+        );
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedback'] });
+      queryClient.invalidateQueries({ queryKey: ['feedback', 'change-logs', feedbackId] });
+    },
+  });
+}
+
+// Update feedback priority
+export function useUpdateFeedbackPriority(feedbackId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (priority: FeedbackPriority) =>
+      fetchApi<Feedback>(`/api/feedback/${feedbackId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ priority }),
+      }),
+    onMutate: async (newPriority) => {
+      await queryClient.cancelQueries({
+        queryKey: ['feedback', 'item', feedbackId],
+      });
+
+      const previousFeedback = queryClient.getQueryData<Feedback>([
+        'feedback',
+        'item',
+        feedbackId,
+      ]);
+
+      if (previousFeedback) {
+        queryClient.setQueryData(['feedback', 'item', feedbackId], {
+          ...previousFeedback,
+          priority: newPriority,
+        });
+      }
+
+      return { previousFeedback };
+    },
+    onError: (_err, _newPriority, context) => {
+      if (context?.previousFeedback) {
+        queryClient.setQueryData(
+          ['feedback', 'item', feedbackId],
+          context.previousFeedback
+        );
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedback'] });
+      queryClient.invalidateQueries({ queryKey: ['feedback', 'change-logs', feedbackId] });
+    },
+  });
+}
+
+// Fetch change logs for a feedback item
+export function useFeedbackChangeLogs(feedbackId: string) {
+  const { isAuthenticated } = useAuth();
+
+  return useQuery({
+    queryKey: ['feedback', 'change-logs', feedbackId],
+    queryFn: () => fetchApi<FeedbackChangeLogListResponse>(`/api/feedback/${feedbackId}/change-logs`),
+    enabled: isAuthenticated && !!feedbackId,
   });
 }

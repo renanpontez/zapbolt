@@ -33,6 +33,7 @@
     "@supabase/supabase-js": "^2.91.0",
     "@tanstack/react-query": "^5.62.7",
     "@zapbolt/shared": "workspace:*",
+    "browser-image-compression": "^2.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -44,6 +45,7 @@
     "react-hook-form": "^7.54.1",
     "rrweb-player": "^2.0.0-alpha.18",
     "tailwind-merge": "^2.5.5",
+    "tailwindcss-animate": "^1.0.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {

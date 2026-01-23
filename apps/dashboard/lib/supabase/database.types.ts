@@ -15,6 +15,7 @@ export type Database = {
           email: string;
           name: string | null;
           avatar_url: string | null;
+          work_email: string | null;
           tier: 'free' | 'pro' | 'enterprise';
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
@@ -28,6 +29,7 @@ export type Database = {
           email: string;
           name?: string | null;
           avatar_url?: string | null;
+          work_email?: string | null;
           tier?: 'free' | 'pro' | 'enterprise';
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
@@ -41,6 +43,7 @@ export type Database = {
           email?: string;
           name?: string | null;
           avatar_url?: string | null;
+          work_email?: string | null;
           tier?: 'free' | 'pro' | 'enterprise';
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
@@ -53,7 +56,7 @@ export type Database = {
       projects: {
         Row: {
           id: string;
-          user_id: string;
+          created_by: string;
           name: string;
           domain: string;
           api_key: string;
@@ -66,7 +69,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          user_id: string;
+          created_by: string;
           name: string;
           domain: string;
           api_key?: string;
@@ -79,7 +82,7 @@ export type Database = {
         };
         Update: {
           id?: string;
-          user_id?: string;
+          created_by?: string;
           name?: string;
           domain?: string;
           api_key?: string;
@@ -89,6 +92,35 @@ export type Database = {
           monthly_feedback_count?: number;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      project_members: {
+        Row: {
+          id: string;
+          project_id: string;
+          user_id: string;
+          role: 'user' | 'admin';
+          invited_by: string | null;
+          invited_at: string;
+          accepted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          user_id: string;
+          role?: 'user' | 'admin';
+          invited_by?: string | null;
+          invited_at?: string;
+          accepted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          user_id?: string;
+          role?: 'user' | 'admin';
+          invited_by?: string | null;
+          invited_at?: string;
+          accepted_at?: string | null;
         };
       };
       url_patterns: {
@@ -168,6 +200,7 @@ export type Database = {
           message: string;
           sent_by: 'admin' | 'user';
           sent_by_email: string;
+          attachment_url: string | null;
           created_at: string;
         };
         Insert: {
@@ -176,6 +209,7 @@ export type Database = {
           message: string;
           sent_by?: 'admin' | 'user';
           sent_by_email: string;
+          attachment_url?: string | null;
           created_at?: string;
         };
         Update: {
@@ -184,6 +218,59 @@ export type Database = {
           message?: string;
           sent_by?: 'admin' | 'user';
           sent_by_email?: string;
+          attachment_url?: string | null;
+          created_at?: string;
+        };
+      };
+      internal_notes: {
+        Row: {
+          id: string;
+          feedback_id: string;
+          user_id: string;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          feedback_id: string;
+          user_id: string;
+          content: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          feedback_id?: string;
+          user_id?: string;
+          content?: string;
+          created_at?: string;
+        };
+      };
+      feedback_change_logs: {
+        Row: {
+          id: string;
+          feedback_id: string;
+          field: 'status' | 'category' | 'priority';
+          old_value: string;
+          new_value: string;
+          changed_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          feedback_id: string;
+          field: 'status' | 'category' | 'priority';
+          old_value: string;
+          new_value: string;
+          changed_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          feedback_id?: string;
+          field?: 'status' | 'category' | 'priority';
+          old_value?: string;
+          new_value?: string;
+          changed_by?: string;
           created_at?: string;
         };
       };
@@ -196,9 +283,11 @@ export type Database = {
     };
     Enums: {
       feedback_category: 'bug' | 'feature' | 'improvement' | 'question' | 'other';
+      feedback_change_field: 'status' | 'category' | 'priority';
       feedback_priority: 'low' | 'medium' | 'high' | 'critical';
       feedback_reply_sender: 'admin' | 'user';
       feedback_status: 'new' | 'in_progress' | 'resolved' | 'closed' | 'archived';
+      project_member_role: 'user' | 'admin';
       url_pattern_type: 'include' | 'exclude';
       user_tier: 'free' | 'pro' | 'enterprise';
     };
