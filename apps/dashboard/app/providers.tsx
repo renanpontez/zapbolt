@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { AuthProvider, type AuthUser } from '@/lib/auth/AuthContext';
+import { ThemeProvider } from '@/lib/theme';
 import { Toaster } from '@/components/ui/toaster';
 
 interface ProvidersProps {
@@ -24,11 +25,13 @@ export function Providers({ children, initialUser }: ProvidersProps) {
   );
 
   return (
-    <AuthProvider initialUser={initialUser}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider initialUser={initialUser}>
+        <QueryClientProvider client={queryClient}>
+          {children}
+          <Toaster />
+        </QueryClientProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

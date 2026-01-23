@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ThemeSettings } from '@/components/settings/theme-settings';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -167,6 +168,9 @@ export default function SettingsPage() {
             </form>
           </CardContent>
         </Card>
+
+        {/* Theme Settings */}
+        <ThemeSettings />
 
         {/* Password Settings */}
         <Card>

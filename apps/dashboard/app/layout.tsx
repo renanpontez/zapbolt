@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import { getServerUser } from '@/lib/auth/getServerUser';
+import { ThemeScript } from '@/lib/theme';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -20,6 +21,9 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body className={inter.className}>
         <Providers initialUser={user}>{children}</Providers>
       </body>

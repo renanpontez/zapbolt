@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import Link from 'next/link';
 import { useSidebar } from './sidebar-context';
 
@@ -62,6 +63,9 @@ export function TopBar() {
             {user.tier.charAt(0).toUpperCase() + user.tier.slice(1)}
           </Badge>
         )}
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative">
