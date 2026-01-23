@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createAuthClient, createServerClient } from '@/lib/supabase/server';
+import { checkProjectMembership, requireProjectAdmin } from '@/lib/supabase/membership';
 import { z } from 'zod';
 import type { Tables } from '@/lib/supabase/database.types';
 
 const createReplySchema = z.object({
   message: z.string().min(1, 'Message is required').max(5000, 'Message is too long'),
+  attachmentUrl: z.string().url().optional(),
 });
-
-type FeedbackWithProject = Tables<'feedback'> & {
-  projects: { user_id: string };
-};
 
 type FeedbackReplyRow = Tables<'feedback_replies'>;
 
@@ -33,19 +31,25 @@ export async function GET(
 
     const supabase = await createServerClient();
 
-    // Verify ownership of the feedback
-    const { data: feedbackData } = await supabase
+    // Get feedback to check membership
+    const { data: getFeedbackData } = await supabase
       .from('feedback')
-      .select(`
-        id,
-        projects!inner (user_id)
-      `)
+      .select('id, project_id')
       .eq('id', id)
       .single();
 
-    const feedback = feedbackData as unknown as { id: string; projects: { user_id: string } } | null;
+    if (!getFeedbackData) {
+      return NextResponse.json(
+        { error: { code: 'NOT_FOUND', message: 'Feedback not found' } },
+        { status: 404 }
+      );
+    }
 
-    if (!feedback || feedback.projects.user_id !== user.id) {
+    const getFeedback = getFeedbackData as { id: string; project_id: string };
+
+    // Verify membership
+    const membership = await checkProjectMembership(user.id, getFeedback.project_id);
+    if (!membership.isMember) {
       return NextResponse.json(
         { error: { code: 'NOT_FOUND', message: 'Feedback not found' } },
         { status: 404 }
@@ -61,8 +65,9 @@ export async function GET(
       .order('created_at', { ascending: true });
 
     if (repliesError) {
+      console.error('Failed to fetch replies:', repliesError);
       return NextResponse.json(
-        { error: { code: 'FETCH_FAILED', message: 'Failed to fetch replies' } },
+        { error: { code: 'FETCH_FAILED', message: 'Failed to fetch replies', details: repliesError.message } },
         { status: 500 }
       );
     }
@@ -76,6 +81,7 @@ export async function GET(
         message: reply.message,
         sentBy: reply.sent_by,
         sentByEmail: reply.sent_by_email,
+        attachmentUrl: reply.attachment_url,
         createdAt: reply.created_at,
       })),
     });
@@ -87,7 +93,7 @@ export async function GET(
   }
 }
 
-// POST /api/feedback/[id]/reply - Send a reply to feedback
+// POST /api/feedback/[id]/reply - Send a reply to feedback (admin only)
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -106,17 +112,14 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { message } = createReplySchema.parse(body);
+    const { message, attachmentUrl } = createReplySchema.parse(body);
 
     const supabase = await createServerClient();
 
-    // Get feedback with project info to verify ownership and check for email
+    // Get feedback to verify access
     const { data: feedbackData, error: feedbackError } = await supabase
       .from('feedback')
-      .select(`
-        *,
-        projects!inner (user_id)
-      `)
+      .select('*')
       .eq('id', id)
       .single();
 
@@ -127,12 +130,13 @@ export async function POST(
       );
     }
 
-    const feedback = feedbackData as unknown as FeedbackWithProject;
+    const feedback = feedbackData as Tables<'feedback'>;
 
-    // Verify ownership
-    if (feedback.projects.user_id !== user.id) {
+    // Verify admin access
+    const isAdmin = await requireProjectAdmin(user.id, feedback.project_id);
+    if (!isAdmin) {
       return NextResponse.json(
-        { error: { code: 'FORBIDDEN', message: 'Access denied' } },
+        { error: { code: 'FORBIDDEN', message: 'Only project admins can reply to feedback' } },
         { status: 403 }
       );
     }
@@ -154,6 +158,7 @@ export async function POST(
         message,
         sent_by: 'admin',
         sent_by_email: user.email || 'admin@example.com',
+        attachment_url: attachmentUrl || null,
       })
       .select()
       .single();

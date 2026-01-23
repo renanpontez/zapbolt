@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 const signupSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
+  workEmail: z.string().email('Please enter a valid email address').optional().or(z.literal('')),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -49,6 +50,7 @@ export default function SignupPage() {
           email: data.email,
           password: data.password,
           name: data.name,
+          workEmail: data.workEmail || undefined,
         }),
       });
 
@@ -121,6 +123,22 @@ export default function SignupPage() {
             />
             {errors.email && (
               <p className="text-sm text-destructive">{errors.email.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="workEmail">Work Email (Optional)</Label>
+            <Input
+              id="workEmail"
+              type="email"
+              placeholder="you@company.com"
+              autoComplete="email"
+              {...register('workEmail')}
+            />
+            <p className="text-xs text-muted-foreground">
+              Used for team collaboration. You can be invited to projects using this email.
+            </p>
+            {errors.workEmail && (
+              <p className="text-sm text-destructive">{errors.workEmail.message}</p>
             )}
           </div>
           <div className="space-y-2">

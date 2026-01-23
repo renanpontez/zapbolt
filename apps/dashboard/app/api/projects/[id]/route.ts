@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createAuthClient, createServerClient } from '@/lib/supabase/server';
+import { checkProjectMembership, requireProjectAdmin } from '@/lib/supabase/membership';
 import { z } from 'zod';
 import type { Tables } from '@/lib/supabase/database.types';
+import type { ProjectMemberRole } from '@zapbolt/shared';
 
 const updateProjectSchema = z.object({
   name: z.string().min(2).max(50).optional(),
@@ -12,6 +14,7 @@ const updateProjectSchema = z.object({
 
 type ProjectWithPatterns = Tables<'projects'> & {
   url_patterns: Tables<'url_patterns'>[] | null;
+  project_members?: { role: ProjectMemberRole }[];
 };
 
 // GET /api/projects/[id] - Get a single project
@@ -32,6 +35,15 @@ export async function GET(
       );
     }
 
+    // Check membership (RLS will also enforce this, but we need the role)
+    const membership = await checkProjectMembership(user.id, id);
+    if (!membership.isMember) {
+      return NextResponse.json(
+        { error: { code: 'NOT_FOUND', message: 'Project not found' } },
+        { status: 404 }
+      );
+    }
+
     const supabase = await createServerClient();
     const { data, error } = await supabase
       .from('projects')
@@ -40,7 +52,6 @@ export async function GET(
         url_patterns (*)
       `)
       .eq('id', id)
-      .eq('user_id', user.id)
       .single();
 
     if (error || !data) {
@@ -54,7 +65,7 @@ export async function GET(
 
     return NextResponse.json({
       id: project.id,
-      userId: project.user_id,
+      userId: project.created_by,
       name: project.name,
       domain: project.domain,
       apiKey: project.api_key,
@@ -66,6 +77,7 @@ export async function GET(
       isActive: project.is_active,
       createdAt: project.created_at,
       updatedAt: project.updated_at,
+      currentUserRole: membership.role,
     });
   } catch {
     return NextResponse.json(
@@ -75,7 +87,7 @@ export async function GET(
   }
 }
 
-// PATCH /api/projects/[id] - Update a project
+// PATCH /api/projects/[id] - Update a project (admin only)
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -90,6 +102,15 @@ export async function PATCH(
       return NextResponse.json(
         { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
         { status: 401 }
+      );
+    }
+
+    // Check if user is admin of this project
+    const isAdmin = await requireProjectAdmin(user.id, id);
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: { code: 'FORBIDDEN', message: 'Only project admins can update project settings' } },
+        { status: 403 }
       );
     }
 
@@ -110,7 +131,6 @@ export async function PATCH(
       .from('projects')
       .update(updateData)
       .eq('id', id)
-      .eq('user_id', user.id)
       .select(`
         *,
         url_patterns (*)
@@ -128,7 +148,7 @@ export async function PATCH(
 
     return NextResponse.json({
       id: project.id,
-      userId: project.user_id,
+      userId: project.created_by,
       name: project.name,
       domain: project.domain,
       apiKey: project.api_key,
@@ -140,6 +160,7 @@ export async function PATCH(
       isActive: project.is_active,
       createdAt: project.created_at,
       updatedAt: project.updated_at,
+      currentUserRole: 'admin',
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -155,7 +176,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/projects/[id] - Delete a project
+// DELETE /api/projects/[id] - Delete a project (admin only)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -173,12 +194,20 @@ export async function DELETE(
       );
     }
 
+    // Check if user is admin of this project
+    const isAdmin = await requireProjectAdmin(user.id, id);
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: { code: 'FORBIDDEN', message: 'Only project admins can delete a project' } },
+        { status: 403 }
+      );
+    }
+
     const supabase = await createServerClient();
     const { error } = await supabase
       .from('projects')
       .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
+      .eq('id', id);
 
     if (error) {
       return NextResponse.json(

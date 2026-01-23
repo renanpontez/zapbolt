@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAuthClient, createServerClient } from '@/lib/supabase/server';
+import { checkProjectMembership } from '@/lib/supabase/membership';
 
 interface FeedbackStatus {
   status: string;
@@ -31,14 +32,22 @@ export async function GET(
       );
     }
 
+    // Verify project membership
+    const membership = await checkProjectMembership(user.id, projectId);
+    if (!membership.isMember) {
+      return NextResponse.json(
+        { error: { code: 'NOT_FOUND', message: 'Project not found' } },
+        { status: 404 }
+      );
+    }
+
     const supabase = await createServerClient();
 
-    // Verify project ownership
+    // Get project info
     const { data: projectData } = await supabase
       .from('projects')
       .select('id, feedback_count, monthly_feedback_count')
       .eq('id', projectId)
-      .eq('user_id', user.id)
       .single();
 
     if (!projectData) {

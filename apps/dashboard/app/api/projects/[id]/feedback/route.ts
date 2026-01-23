@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAuthClient, createServerClient } from '@/lib/supabase/server';
+import { checkProjectMembership } from '@/lib/supabase/membership';
 import type { Tables } from '@/lib/supabase/database.types';
 
 // Valid sort columns for feedback
@@ -40,21 +41,16 @@ export async function GET(
       );
     }
 
-    // Verify project ownership
-    const supabase = await createServerClient();
-    const { data: project } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('id', projectId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (!project) {
+    // Verify project membership
+    const membership = await checkProjectMembership(user.id, projectId);
+    if (!membership.isMember) {
       return NextResponse.json(
         { error: { code: 'NOT_FOUND', message: 'Project not found' } },
         { status: 404 }
       );
     }
+
+    const supabase = await createServerClient();
 
     // Parse filters
     const page = parseInt(searchParams.get('page') || '1');

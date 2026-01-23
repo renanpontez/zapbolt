@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ScriptTagCopy } from '@/components/projects/script-tag-copy';
+import { ProjectMembers } from '@/components/projects/project-members';
 import { copyToClipboard } from '@/lib/utils';
 
 interface ProjectSettingsPageProps {
@@ -221,7 +222,11 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Project Name</Label>
-              <Input id="name" {...form.register('name')} />
+              <Input
+                id="name"
+                {...form.register('name')}
+                disabled={project.currentUserRole !== 'admin'}
+              />
               {form.formState.errors.name && (
                 <p className="text-sm text-destructive">
                   {form.formState.errors.name.message}
@@ -231,7 +236,11 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
 
             <div className="space-y-2">
               <Label htmlFor="domain">Domain</Label>
-              <Input id="domain" {...form.register('domain')} />
+              <Input
+                id="domain"
+                {...form.register('domain')}
+                disabled={project.currentUserRole !== 'admin'}
+              />
               {form.formState.errors.domain && (
                 <p className="text-sm text-destructive">
                   {form.formState.errors.domain.message}
@@ -249,8 +258,14 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
               <Switch
                 checked={localIsActive ?? project.isActive}
                 onCheckedChange={handleToggleActive}
+                disabled={project.currentUserRole !== 'admin'}
               />
             </div>
+            {project.currentUserRole !== 'admin' && (
+              <p className="text-xs text-muted-foreground">
+                Only project admins can edit these settings.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -283,6 +298,7 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
               <Select
                 value={localWidgetConfig?.position ?? project.widgetConfig.position}
                 onValueChange={handlePositionChange}
+                disabled={project.currentUserRole !== 'admin'}
               >
                 <SelectTrigger className="w-[200px]">
                   <SelectValue />
@@ -305,12 +321,14 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
                   value={localWidgetConfig?.primaryColor ?? project.widgetConfig.primaryColor}
                   onChange={(e) => handleColorChange(e.target.value)}
                   className="w-12 h-9 p-1 cursor-pointer"
+                  disabled={project.currentUserRole !== 'admin'}
                 />
                 <Input
                   value={localWidgetConfig?.primaryColor ?? project.widgetConfig.primaryColor}
                   onChange={(e) => handleColorChange(e.target.value)}
                   className="w-32 font-mono"
                   placeholder="#3b82f6"
+                  disabled={project.currentUserRole !== 'admin'}
                 />
                 {/* Color preview */}
                 <div
@@ -319,61 +337,73 @@ export default function ProjectSettingsPage({ params }: ProjectSettingsPageProps
                 />
               </div>
             </div>
+            {project.currentUserRole !== 'admin' && (
+              <p className="text-xs text-muted-foreground">
+                Only project admins can customize the widget appearance.
+              </p>
+            )}
           </CardContent>
         </Card>
 
-        {/* API Key */}
-        <Card>
-          <CardHeader>
-            <CardTitle>API Key</CardTitle>
-            <CardDescription>
-              Your project API key for server-side integrations
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Input
-                value={project.apiKey}
-                readOnly
-                className="font-mono"
-              />
-              <Button variant="outline" onClick={handleCopyApiKey}>
-                {apiKeyCopied ? 'Copied!' : 'Copy'}
+        {/* Team Members */}
+        <ProjectMembers projectId={id} />
+
+        {/* API Key - Admin only */}
+        {project.currentUserRole === 'admin' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>API Key</CardTitle>
+              <CardDescription>
+                Your project API key for server-side integrations
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Input
+                  value={project.apiKey}
+                  readOnly
+                  className="font-mono"
+                />
+                <Button variant="outline" onClick={handleCopyApiKey}>
+                  {apiKeyCopied ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleRegenerateKey}
+                disabled={regenerateApiKey.isPending}
+              >
+                {regenerateApiKey.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Regenerate Key
               </Button>
-            </div>
-            <Button
-              variant="outline"
-              onClick={handleRegenerateKey}
-              disabled={regenerateApiKey.isPending}
-            >
-              {regenerateApiKey.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
-              )}
-              Regenerate Key
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Regenerating the key will invalidate the current key immediately.
-            </p>
-          </CardContent>
-        </Card>
+              <p className="text-xs text-muted-foreground">
+                Regenerating the key will invalidate the current key immediately.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Danger Zone */}
-        <Card className="border-destructive">
-          <CardHeader>
-            <CardTitle className="text-destructive">Danger Zone</CardTitle>
-            <CardDescription>
-              Irreversible and destructive actions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Project
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Danger Zone - Admin only */}
+        {project.currentUserRole === 'admin' && (
+          <Card className="border-destructive">
+            <CardHeader>
+              <CardTitle className="text-destructive">Danger Zone</CardTitle>
+              <CardDescription>
+                Irreversible and destructive actions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Project
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Delete Confirmation */}

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { MessageSquare, FolderKanban, TrendingUp, Clock, AlertCircle, ArrowUpRight } from 'lucide-react';
 import { useDashboardStats, type DashboardStats } from '@/hooks/useDashboardStats';
 import { useAllFeedback, type FeedbackWithProject } from '@/hooks/useFeedback';
+import { OnboardingChecklist } from '@/components/onboarding';
 import { cn } from '@/lib/utils';
 
 interface StatCardProps {
@@ -224,6 +225,15 @@ export default function DashboardPage() {
           Overview of your feedback and projects
         </p>
       </div>
+
+      {/* Onboarding Checklist */}
+      {stats && (
+        <OnboardingChecklist
+          totalProjects={stats.totalProjects}
+          activeProjects={stats.activeProjects}
+          totalFeedback={stats.totalFeedback}
+        />
+      )}
 
       {/* Stats Section */}
       {statsLoading ? (
