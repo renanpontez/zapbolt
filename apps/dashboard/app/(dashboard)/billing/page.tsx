@@ -101,6 +101,26 @@ function BillingContent() {
     router.push(`/billing/checkout?tier=${tier}`);
   };
 
+  const handleDowngrade = async () => {
+    setLoading('downgrade');
+    try {
+      const response = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flow: 'cancel' }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error('Failed to open cancellation portal:', error);
+    } finally {
+      setLoading(null);
+    }
+  };
+
   const handleManageBilling = async () => {
     setLoading('portal');
     try {
@@ -286,12 +306,22 @@ function BillingContent() {
                   >
                     Contact Sales
                   </Button>
+                ) : plan.tier === 'free' && currentTier !== 'free' ? (
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={handleDowngrade}
+                    disabled={loading === 'downgrade'}
+                  >
+                    {loading === 'downgrade' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Cancel Subscription
+                  </Button>
                 ) : (
                   <Button
                     className="w-full"
                     onClick={() => handleUpgrade(plan.tier)}
                   >
-                    {plan.tier === 'free' ? 'Downgrade' : 'Upgrade'}
+                    Upgrade
                   </Button>
                 )}
               </CardFooter>
