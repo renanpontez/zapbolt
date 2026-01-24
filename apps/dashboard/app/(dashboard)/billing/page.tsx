@@ -69,6 +69,9 @@ function BillingContent() {
 
   const [loading, setLoading] = useState<string | null>(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [billingStatus, setBillingStatus] = useState<any>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   const currentTier = user?.tier || 'free';
 
@@ -111,6 +114,37 @@ function BillingContent() {
       }
     } catch (error) {
       console.error('Failed to create portal session:', error);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleCheckStatus = async () => {
+    setStatusLoading(true);
+    try {
+      const response = await fetch('/api/billing/status');
+      const data = await response.json();
+      setBillingStatus(data);
+      console.log('Billing status:', data);
+    } catch (error) {
+      console.error('Failed to check status:', error);
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const handleSyncFromStripe = async () => {
+    setLoading('sync');
+    try {
+      const response = await fetch('/api/billing/sync', { method: 'POST' });
+      const data = await response.json();
+      console.log('Sync result:', data);
+      if (data.synced) {
+        refreshUser?.();
+        handleCheckStatus();
+      }
+    } catch (error) {
+      console.error('Failed to sync:', error);
     } finally {
       setLoading(null);
     }
@@ -161,6 +195,45 @@ function BillingContent() {
             )}
           </div>
         </CardContent>
+      </Card>
+
+      {/* Debug: Subscription Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Subscription Debug</span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCheckStatus}
+                disabled={statusLoading}
+              >
+                {statusLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Check Status
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncFromStripe}
+                disabled={loading === 'sync'}
+              >
+                {loading === 'sync' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Sync from Stripe
+              </Button>
+            </div>
+          </CardTitle>
+          <CardDescription>
+            Debug info for troubleshooting subscription issues
+          </CardDescription>
+        </CardHeader>
+        {billingStatus && (
+          <CardContent>
+            <pre className="overflow-auto rounded-lg bg-muted p-4 text-xs">
+              {JSON.stringify(billingStatus, null, 2)}
+            </pre>
+          </CardContent>
+        )}
       </Card>
 
       {/* Plans */}
