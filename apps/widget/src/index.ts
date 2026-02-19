@@ -3,7 +3,7 @@ import {
   destroyWidget,
   setCustomProperties,
 } from './core/shadow-dom';
-import { setConfig, getConfig, fetchRemoteConfig, mergeRemoteConfig } from './core/config';
+import { setConfig, getConfig, fetchRemoteConfig, mergeRemoteConfig, ProjectInactiveError } from './core/config';
 import { shouldShowWidget, getCurrentUrl } from './core/url-matcher';
 import { createButton, showButton, hideButton, destroyButton } from './components/Button';
 import {
@@ -89,6 +89,10 @@ async function init(userConfig: ZapboltConfig): Promise<void> {
       console.log('[Zapbolt] Merged config:', config);
     }
   } catch (error) {
+    if (error instanceof ProjectInactiveError) {
+      console.info('[Zapbolt] Project is inactive, widget will not render');
+      return;
+    }
     console.error('[Zapbolt] Failed to fetch remote config:', error);
   }
 

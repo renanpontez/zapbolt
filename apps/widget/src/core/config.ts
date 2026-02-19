@@ -56,6 +56,13 @@ export function setConfig(newConfig: Partial<WidgetConfig> & { projectId: string
   return config;
 }
 
+export class ProjectInactiveError extends Error {
+  constructor() {
+    super('Project is inactive');
+    this.name = 'ProjectInactiveError';
+  }
+}
+
 export async function fetchRemoteConfig(
   projectId: string,
   apiUrl: string
@@ -69,11 +76,20 @@ export async function fetchRemoteConfig(
     });
 
     if (!response.ok) {
+      const data = await response.json().catch(() => null);
+
+      if (data?.error?.code === 'PROJECT_INACTIVE') {
+        throw new ProjectInactiveError();
+      }
+
       throw new Error(`Failed to fetch config: ${response.status}`);
     }
 
     return response.json();
   } catch (error) {
+    if (error instanceof ProjectInactiveError) {
+      throw error;
+    }
     console.error('[Zapbolt] Failed to fetch remote config:', error);
     return null;
   }
