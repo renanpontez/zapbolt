@@ -111,45 +111,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create the project
+    // Create the project + admin membership atomically via DB function
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: project, error } = await (supabase as any)
-      .from('projects')
-      .insert({
-        created_by: user.id,
-        name,
-        domain,
-      })
-      .select()
-      .single();
+    const { data: projects, error } = await (authClient as any)
+      .rpc('create_project_with_admin', { p_name: name, p_domain: domain }) as {
+        data: Tables<'projects'>[] | null;
+        error: { message: string } | null;
+      };
 
-    if (error) {
+    if (error || !projects || projects.length === 0) {
       return NextResponse.json(
-        { error: { code: 'CREATE_FAILED', message: error.message } },
+        { error: { code: 'CREATE_FAILED', message: error?.message || 'Failed to create project' } },
         { status: 500 }
       );
     }
 
-    // Create project_member entry with admin role
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: memberError } = await (supabase as any)
-      .from('project_members')
-      .insert({
-        project_id: project.id,
-        user_id: user.id,
-        role: 'admin',
-        invited_by: user.id,
-        accepted_at: new Date().toISOString(),
-      });
-
-    if (memberError) {
-      // If member creation fails, delete the project to maintain consistency
-      await supabase.from('projects').delete().eq('id', project.id);
-      return NextResponse.json(
-        { error: { code: 'CREATE_FAILED', message: 'Failed to set up project membership' } },
-        { status: 500 }
-      );
-    }
+    const project = projects[0];
 
     return NextResponse.json({
       id: project.id,

@@ -279,7 +279,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      create_project_with_admin: {
+        Args: { p_name: string; p_domain: string };
+        Returns: Database['public']['Tables']['projects']['Row'][];
+      };
     };
     Enums: {
       feedback_category: 'bug' | 'feature' | 'improvement' | 'question' | 'other';
